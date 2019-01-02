@@ -17,19 +17,19 @@ limitations under the License.
 package main
 
 import (
-	"errors"
+//	"errors"
 	"flag"
 	"os"
-	"path"
+//	"path"
 	"syscall"
 
-	"bytes"
-	"crypto/sha256"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"strings"
+//	"bytes"
+//	"crypto/sha256"
+//	"fmt"
+//	"io"
+//	"io/ioutil"
+//	"log"
+//	"strings"
 
 	"nfs"
 	"rpc"
@@ -50,13 +50,13 @@ const (
 
 type nfsPathProvisioner struct {
 	nfsHost string
-	nfsPath string
+	nfsBasepath string
 	nfsMode string
 	nfsOwnerid string
 }
 
 // NewHostPathProvisioner creates a new hostpath provisioner
-func NewHostPathProvisioner() controller.Provisioner {
+func NewNfsPathProvisioner() controller.Provisioner {
         nfsHost := os.Getenv("NFS_HOST")
         if nfsHost == "" {
                 glog.Fatal("env variable NFS_HOST must be set so that this provisioner can identify itself")
@@ -67,8 +67,8 @@ func NewHostPathProvisioner() controller.Provisioner {
                 glog.Fatal("env variable NFS_BASE_PATH must be set so that this provisioner can identify itself")
         }
 
-	nfsMode = "0700"
-	nfsOwnerid = "65534"
+	nfsMode := "0700"
+	nfsOwnerid := "65534"
 
 	util.Infof("host=%s target=%s\n", nfsHost, nfsBasepath)
 
@@ -80,7 +80,7 @@ func NewHostPathProvisioner() controller.Provisioner {
 
 	auth := rpc.NewAuthUnix("hasselhoff", 0, 0)
 
-	v, err := mount.Mount(target, auth.Auth())
+	v, err := mount.Mount(nfsBasepath, auth.Auth())
 	if err != nil {
 		glog.Fatal("unable to mount volume: %v", err)
 	}
@@ -120,8 +120,9 @@ func (p *nfsPathProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 				v1.ResourceName(v1.ResourceStorage): options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
-				nfs: &v1.HostPathVolumeSource{
-					host: p.nfsHost,
+				NFS: &v1.NFSVolumeSource{
+					Server: p.nfsHost,
+					Path: p.nfsBasepath,
 				},
 			},
 		},
@@ -180,6 +181,6 @@ func main() {
 
 	// Start the provision controller which will dynamically provision hostPath
 	// PVs
-	pc := controller.NewProvisionController(clientset, provisionerName, hostPathProvisioner, serverVersion.GitVersion)
+	pc := controller.NewProvisionController(clientset, provisionerName, nfsPathProvisioner, serverVersion.GitVersion)
 	pc.Run(wait.NeverStop)
 }
