@@ -48,41 +48,69 @@ const (
 	provisionerName = "example.com/mynfsprovisioner"
 )
 
-type hostPathProvisioner struct {
-	nfshost string
-
-	nfspath string
-
-	mode string
-
-	ownerid string
+type nfsPathProvisioner struct {
+	nfsHost string
+	nfsPath string
+	nfsMode string
+	nfsOwnerid string
 }
 
 // NewHostPathProvisioner creates a new hostpath provisioner
 func NewHostPathProvisioner() controller.Provisioner {
-	return &hostPathProvisioner{
-		nfshost:    "127.0.0.1",
-		nfspath: "/nfsshare",
-		mode: "0700",
-		ownerid: "65534",
+        nfsHost := os.Getenv("NFS_HOST")
+        if nfsHost == "" {
+                glog.Fatal("env variable NFS_HOST must be set so that this provisioner can identify itself")
+        }
+
+        nfsBasepath := os.Getenv("NFS_BASE_PATH")
+        if nfsBasepath == "" {
+                glog.Fatal("env variable NFS_BASE_PATH must be set so that this provisioner can identify itself")
+        }
+
+	nfsMode = "0700"
+	nfsOwnerid = "65534"
+
+	util.Infof("host=%s target=%s\n", nfsHost, nfsBasepath)
+
+	mount, err := nfs.DialMount(nfsHost)
+	if err != nil {
+		glog.Fatal("unable to dial MOUNT service: %v", err)
+	}
+	defer mount.Close()
+
+	auth := rpc.NewAuthUnix("hasselhoff", 0, 0)
+
+	v, err := mount.Mount(target, auth.Auth())
+	if err != nil {
+		glog.Fatal("unable to mount volume: %v", err)
+	}
+        defer v.Close()
+
+	return &nfsPathProvisioner{
+		nfsHost:   nfsHost,
+		nfsBasepath: nfsBasepath,
+		nfsMode: nfsMode,
+		nfsOwnerid: nfsOwnerid,
 	}
 }
 
-var _ controller.Provisioner = &hostPathProvisioner{}
+var _ controller.Provisioner = &nfsPathProvisioner{}
 
 // Provision creates a storage asset and returns a PV object representing it.
-func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
-	path := path.Join(p.pvDir, options.PVName)
+func (p *nfsPathProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
+//	path := path.Join(p.pvDir, options.PVName)
 
-	if err := os.MkdirAll(path, 0777); err != nil {
-		return nil, err
-	}
+//	if err := os.MkdirAll(path, 0777); err != nil {
+//		return nil, err
+//	}
 
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: options.PVName,
+//			Name: options.PVName,
+			Name: "test",
 			Annotations: map[string]string{
-				"hostPathProvisionerIdentity": p.identity,
+				"nfshost": p.nfsHost,
+				"nfsbasepath": p.nfsBasepath,
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
@@ -92,8 +120,8 @@ func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 				v1.ResourceName(v1.ResourceStorage): options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
-				HostPath: &v1.HostPathVolumeSource{
-					Path: path,
+				nfs: &v1.HostPathVolumeSource{
+					host: p.nfsHost,
 				},
 			},
 		},
@@ -104,20 +132,20 @@ func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 
 // Delete removes the storage asset that was created by Provision represented
 // by the given PV.
-func (p *hostPathProvisioner) Delete(volume *v1.PersistentVolume) error {
-	ann, ok := volume.Annotations["hostPathProvisionerIdentity"]
-	if !ok {
-		return errors.New("identity annotation not found on PV")
-	}
-	if ann != p.identity {
-		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
-	}
-
-	path := path.Join(p.pvDir, volume.Name)
-	if err := os.RemoveAll(path); err != nil {
-		return err
-	}
-
+func (p *nfsPathProvisioner) Delete(volume *v1.PersistentVolume) error {
+//	ann, ok := volume.Annotations["nfsPathProvisionerIdentity"]
+//	if !ok {
+//		return errors.New("identity annotation not found on PV")
+//	}
+//	if ann != p.identity {
+//		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
+//	}
+//
+//	path := path.Join(p.pvDir, volume.Name)
+//	if err := os.RemoveAll(path); err != nil {
+//		return err
+//	}
+//
 	return nil
 }
 
@@ -148,7 +176,7 @@ func main() {
 
 	// Create the provisioner: it implements the Provisioner interface expected by
 	// the controller
-	hostPathProvisioner := NewHostPathProvisioner()
+	nfsPathProvisioner := NewNfsPathProvisioner()
 
 	// Start the provision controller which will dynamically provision hostPath
 	// PVs
