@@ -1,0 +1,18 @@
+#!/bin/bash
+CURRENT_PATH=$(pwd)
+cp -rf /tmp/src/* ./ 
+rm -rf /tmp/src
+curl -o go1.11.2.linux-amd64.tar.gz -L https://dl.google.com/go/go1.11.2.linux-amd64.tar.gz
+tar -xvzf go1.11.2.linux-amd64.tar.gz
+export PATH=$PATH:$(pwd)/go/bin
+curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+yum install -y git gcc
+cd ./go/src/hostmount
+dep ensure -v
+#GO_ENABLED=0 go build -v -a -ldflags '-extldflags "-static"' -o hostpath-provisioner .
+#mv ./hostpath-provisioner /tmp/
+#rm -rf $CURRENT_PATH/*
+#rm -rf $CURRENT_PATH/.cache
+#mv /tmp/hostpath-provisioner $CURRENT_PATH
+#yum history undo last -y
+#yum clean all
